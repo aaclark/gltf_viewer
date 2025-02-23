@@ -29,12 +29,33 @@ struct Context {
     GLFWwindow *window;
     gltf::GLTFAsset asset;
     gltf::DrawableList drawables;
-    cg::Trackball trackball;
     GLuint program;
     GLuint emptyVAO;
     float elapsedTime;
-    std::string gltfFilename = "cube_rgb.gltf";
+    // std::string gltfFilename = "cube_rgb.gltf"; //Assignment1
+    // std::string gltfFilename = "blendaxes1.gltf"; //Debugging
+    std::string gltfFilename = "armadillo.gltf"; //Assignment2
     // Add more variables here...
+    glm::vec3 bgColor = glm::vec3(0.5f, 0.5f, 0.5f);
+    // Enable/Disable matrices
+    bool enable_model = false;
+    bool enable_view = true;
+    bool enable_projection = true;
+    // Model matrix changes
+    bool enable_scale = false;
+    bool enable_rotate_angle = false;
+    bool enable_translate = false;
+    glm::vec3 log_scale = glm::vec3(0.0f);
+    glm::vec3 rotate_angle = glm::vec3(0.0f);
+    glm::vec3 translate = glm::vec3(0.0f);
+    // View matrix changes
+    // glm::vec3 camera_relative = glm::vec3(0.0f, 0.0f, -1.0f);
+    // Perspective matrix changes
+    float z_offset = 0.0f;
+    float fov_y_degrees = 60.0f;
+    // Input
+    bool enable_track = false;
+    cg::Trackball trackball;
 };
 
 // Returns the absolute path to the src/shader directory
@@ -61,7 +82,9 @@ std::string gltf_dir(void)
 
 void do_initialization(Context &ctx)
 {
-    ctx.program = cg::load_shader_program(shader_dir() + "mesh.vert", shader_dir() + "mesh.frag");
+    ctx.program = cg::load_shader_program(
+        shader_dir() + "mesh.vert",
+        shader_dir() + "mesh.frag");
 
     gltf::load_gltf_asset(ctx.gltfFilename, gltf_dir(), ctx.asset);
     gltf::create_drawables_from_gltf_asset(ctx.drawables, ctx.asset);
@@ -78,17 +101,74 @@ void draw_scene(Context &ctx)
     // Define per-scene uniforms
     glUniform1f(glGetUniformLocation(ctx.program, "u_time"), ctx.elapsedTime);
 
-    // View matrix from mouse input (trackball)
-    glm::mat4 view = glm::mat4(ctx.trackball.orient);
+    // Declare transformation matrices (Model-View-Project)
+    auto model = glm::mat4(1.0f);
+    auto view = glm::mat4(1.0f);
+    auto projection = glm::mat4(1.0f);
+
+    /*
+     * The normalized device space is a unique cube, with the left, bottom, near of (-1, -1, -1)
+     * and the right, top, far of (1, 1, 1). Hence, the first component of the vertex coordinate (x)
+     * defines the position from the left (-1) to the right (1). The 2nd component (y) defines the
+     * position form the bottom (-1) to the top (1) and the 3rd component (z) defines the depth form
+     * near (-1) to far (1). Thus, the "up-vector" is (0, 1, 0).
+    */
+
+    // Model transformations: Translation -> Rotation -> Scale
+    if (ctx.enable_model) {
+
+        if (ctx.enable_translate) {
+            model = glm::translate(model, ctx.translate);
+        }
+
+        if (ctx.enable_rotate_angle) {
+            model = glm::rotate(model,
+                glm::radians(ctx.rotate_angle[0]),
+                glm::vec3(1.0f, 0.0f, 0.0f));
+            model = glm::rotate(model,
+                glm::radians(ctx.rotate_angle[1]),
+                glm::vec3(0.0f, 1.0f, 0.0f));
+            model = glm::rotate(model,
+                glm::radians(ctx.rotate_angle[2]),
+                glm::vec3(0.0f, 0.0f, 1.0f));
+        }
+
+        if (ctx.enable_scale) {
+            model = glm::scale(model, glm::exp(ctx.log_scale));
+        }
+    }
+
+    // Change of frame
+    if (ctx.enable_view) {
+        // Mouse input (trackball)
+        if (ctx.enable_track) {
+            view *= glm::mat4(ctx.trackball.orient);
+        }
+        view *= glm::lookAt( // FIXME includes clipping
+            glm::vec3(0.0f, 0.0f, -1.0f),
+            glm::vec3(0.0f, 0.0f, 0.0f),
+            glm::vec3(0.0f, 1.0f, 0.0f));
+    }
+
+    // Perspective
+    if (ctx.enable_projection) {
+        // Camera projection
+        glfwGetWindowSize(ctx.window,&ctx.width,&ctx.height);
+        projection *= glm::perspective(glm::radians(ctx.fov_y_degrees), ((float)ctx.width)/(float)ctx.height, 0.1f, 5.0f);
+    }
 
     // Draw scene
     for (unsigned i = 0; i < ctx.asset.nodes.size(); ++i) {
         const gltf::Node &node = ctx.asset.nodes[i];
         const gltf::Drawable &drawable = ctx.drawables[node.mesh];
 
-        // Define per-object uniforms
+        // // Define per-object uniforms
+        glUniformMatrix4fv(glGetUniformLocation(ctx.program, "u_model"), 1,
+            GL_FALSE, &model[0][0]);
         glUniformMatrix4fv(glGetUniformLocation(ctx.program, "u_view"), 1,
             GL_FALSE, &view[0][0]);
+        glUniformMatrix4fv(glGetUniformLocation(ctx.program, "u_projection"), 1,
+            GL_FALSE, &projection[0][0]);
 
         // Draw object
         glBindVertexArray(drawable.vao);
@@ -108,7 +188,8 @@ void do_rendering(Context &ctx)
     cg::reset_gl_render_state();
 
     // Clear color and depth buffers
-    glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+    // glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+    glClearColor(ctx.bgColor[0], ctx.bgColor[1], ctx.bgColor[2], 1.0f); //
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     draw_scene(ctx);
@@ -231,7 +312,50 @@ int main(int argc, char *argv[])
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();
         ImGui::NewFrame();
+        // TEST Window
         // ImGui::ShowDemoWindow();
+
+        ImGui::Begin("Settings");
+        {
+
+            ImGui::Text("FPS: %.2f", ImGui::GetIO().Framerate);
+            ImGui::ColorEdit3("Background Color", &ctx.bgColor[0]);
+
+            // ImGui::Text("Dist. from Origin: %.2f", glm::distance(ctx.camera_relative, glm::vec3(0.0f)));
+
+            ImGui::Checkbox("Enable Model", &ctx.enable_model);
+            if (ctx.enable_model) {
+
+                ImGui::Checkbox("Enable Scale", &ctx.enable_scale);
+                if (ctx.enable_scale)
+                    ImGui::SliderFloat3("LogScale exp(A/B/C)", &ctx.log_scale[0], -1.0f, 1.0f);
+
+                ImGui::Checkbox("Enable Rotate", &ctx.enable_rotate_angle);
+                if (ctx.enable_rotate_angle)
+                    ImGui::SliderFloat3("Rotate Deg. About X/Y/Z", &ctx.rotate_angle[0], -180.0f, 180.0f);
+
+                ImGui::Checkbox("Enable Translate", &ctx.enable_translate);
+                if (ctx.enable_translate)
+                    ImGui::SliderFloat3("Translate X/Y/Z", &ctx.translate[0], -1.0f, 1.0f);
+
+                // ImGui::SliderFloat("Origin Z-Offset", &ctx.z_offset, 0.0f, 10.0f);
+
+            }
+
+            ImGui::Checkbox("Enable View", &ctx.enable_view);
+            if (ctx.enable_view) {
+                ImGui::Checkbox("Enable Trackball", &ctx.enable_track);
+                // ImGui::SliderFloat3("Camera Relative", &ctx.camera_relative[0], 0.0f, 1.0f);
+                ImGui::Checkbox("Enable Projection", &ctx.enable_projection);
+                if (ctx.enable_projection) {
+                    ImGui::SliderFloat("Focal Angle/2 (FoVY)", &ctx.fov_y_degrees, 30.0f, 120.0f);
+
+                }
+            }
+
+        }
+        ImGui::End();
+
         do_rendering(ctx);
         ImGui::Render();
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
