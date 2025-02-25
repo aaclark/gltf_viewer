@@ -35,10 +35,13 @@ struct Context {
     // std::string gltfFilename = "cube_rgb.gltf"; //Assignment1
     // std::string gltfFilename = "blendaxes1.gltf"; //Debugging
     std::string gltfFilename = "armadillo.gltf"; //Assignment2
-    // Add more variables here...
-    glm::vec3 bgColor = glm::vec3(0.5f, 0.5f, 0.5f);
-    glm::vec3 diffuse_color = glm::vec3(1.0f);
-    glm::vec3 light_position = glm::vec3(0.0f);
+    // Lighting
+    glm::vec3 background_color = glm::vec3(0.5f);
+    glm::vec3 ambient_color = glm::vec3(0.0f);
+    glm::vec3 diffuse_color = glm::vec3(0.0f);
+    glm::vec3 specular_color = glm::vec3(0.0f);
+    float specular_power = 1.0f;
+    glm::vec3 light_position = glm::vec3(1.0f);
     // Enable/Disable matrices
     bool enable_model = false;
     bool enable_view = true;
@@ -159,8 +162,6 @@ void draw_scene(Context &ctx)
         viewToProjection *= glm::perspective(glm::radians(ctx.fov_y_degrees), ((float)ctx.width)/(float)ctx.height, 0.1f, 10.0f);
     }
 
-    modelToWorld = glm::translate(modelToWorld, ctx.translate);
-
     // Draw scene
     for (unsigned i = 0; i < ctx.asset.nodes.size(); ++i) {
         const gltf::Node &node = ctx.asset.nodes[i];
@@ -173,9 +174,17 @@ void draw_scene(Context &ctx)
             GL_FALSE, &worldToView[0][0]);
         glUniformMatrix4fv(glGetUniformLocation(ctx.program, "u_projection"), 1,
             GL_FALSE, &viewToProjection[0][0]);
+
         // Lighting
+        glUniform3fv(glGetUniformLocation(ctx.program, "u_ambientColor"), 1,
+            &ctx.ambient_color[0]);
         glUniform3fv(glGetUniformLocation(ctx.program, "u_diffuseColor"), 1,
             &ctx.diffuse_color[0]);
+        glUniform3fv(glGetUniformLocation(ctx.program, "u_specularColor"), 1,
+            &ctx.specular_color[0]);
+
+        glUniform1fv(glGetUniformLocation(ctx.program, "u_specularPower"), 1,
+            &ctx.specular_power);
         glUniform3fv(glGetUniformLocation(ctx.program, "u_lightPosition"), 1,
             &ctx.light_position[0]);
 
@@ -197,8 +206,7 @@ void do_rendering(Context &ctx)
     cg::reset_gl_render_state();
 
     // Clear color and depth buffers
-    // glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
-    glClearColor(ctx.bgColor[0], ctx.bgColor[1], ctx.bgColor[2], 1.0f); //
+    glClearColor(ctx.background_color[0], ctx.background_color[1], ctx.background_color[2], 1.0f); //
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     draw_scene(ctx);
@@ -328,9 +336,14 @@ int main(int argc, char *argv[])
         {
 
             ImGui::Text("FPS: %.2f", ImGui::GetIO().Framerate);
-            ImGui::ColorEdit3("Background Color", &ctx.bgColor[0]);
 
+            ImGui::ColorEdit3("Background Color", &ctx.background_color[0]);
+
+            ImGui::ColorEdit3("Ambient Color", &ctx.ambient_color[0]);
             ImGui::ColorEdit3("Diffuse Color", &ctx.diffuse_color[0]);
+            ImGui::ColorEdit3("Specular Color", &ctx.specular_color[0]);
+
+            ImGui::SliderFloat("Specular Power", &ctx.specular_power, 1.0f, 50.0f);
             ImGui::SliderFloat3("Light Position", &ctx.light_position[0], -4.f, 4.f);
 
             ImGui::Checkbox("Enable Model", &ctx.enable_model);
