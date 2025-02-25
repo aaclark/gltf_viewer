@@ -330,7 +330,7 @@ int main(int argc, char *argv[])
             ImGui::Text("FPS: %.2f", ImGui::GetIO().Framerate);
             ImGui::ColorEdit3("Background Color", &ctx.bgColor[0]);
 
-            // ImGui::Text("Dist. from Origin: %.2f", glm::distance(ctx.camera_relative, glm::vec3(0.0f)));
+            ImGui::ColorEdit3("Model Color", &ctx.diffuse_color[0]);
 
             ImGui::Checkbox("Enable Model", &ctx.enable_model);
             if (ctx.enable_model) {
