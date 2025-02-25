@@ -33,22 +33,22 @@ void main()
     mv = u_view * u_model;
 
     // Transform the vertex position to view space (eye coordinates)
-//    vec3 positionEye = vec3(mv * a_position);
+    vec3 positionEye = vec3(mv * a_position);
 
     // Calculate the view-space normal
-//    vec3 N = normalize(mat3(mv) * a_normal);
+    vec3 N = normalize(mat3(mv) * a_normal);
 
     // Calculate the view-space light direction
-//    vec3 L = normalize(u_lightPosition - positionEye);
+    vec3 L = normalize(u_lightPosition - positionEye);
 
     // Calculate the diffuse (Lambertian) reflection term
-//    float diffuse = max(0.0, dot(N, L));
+    float diffuse = max(0.0, dot(N, L));
 
     // Multiply the diffuse reflection term with the base surface color
-//    v_color = diffuse * vec4(u_diffuseColor, 1.0);
+    v_color = diffuse * vec4(u_diffuseColor, 1.0);
 
     // Debugging POS
-     v_color = a_position;
+//     v_color = a_position;
 
     gl_Position = (u_projection * mv) * a_position;
 }
