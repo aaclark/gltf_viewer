@@ -6,6 +6,9 @@ uniform float u_time;
 uniform mat4 u_model;
 uniform mat4 u_view;
 uniform mat4 u_projection;
+// Lighting
+uniform vec3 u_diffuseColor; // The diffuse surface color of the model
+uniform vec3 u_lightPosition; // The position of your light source
 
 // Vertex inputs (attributes from vertex buffers)
 // Note: we often declare the position attribute as vec4 in the
@@ -22,10 +25,30 @@ layout(location = 3) in vec2 a_texture; //
 // Vertex shader outputs
 out vec4 v_color; // output vertex color
 
-mat4 v_mvp;
+mat4 mv;
 
 void main()
 {
-    v_color = a_position;//vec4(a_normal * 0.5 + 0.5, 1.0); // transforms from [-1,1] to [0,1]
-    gl_Position = (u_projection * u_view * u_model) * vec4(a_position.xyz, 1.0);
+
+    mv = u_view * u_model;
+
+    // Transform the vertex position to view space (eye coordinates)
+//    vec3 positionEye = vec3(mv * a_position);
+
+    // Calculate the view-space normal
+//    vec3 N = normalize(mat3(mv) * a_normal);
+
+    // Calculate the view-space light direction
+//    vec3 L = normalize(u_lightPosition - positionEye);
+
+    // Calculate the diffuse (Lambertian) reflection term
+//    float diffuse = max(0.0, dot(N, L));
+
+    // Multiply the diffuse reflection term with the base surface color
+//    v_color = diffuse * vec4(u_diffuseColor, 1.0);
+
+    // Debugging POS
+     v_color = a_position;
+
+    gl_Position = (u_projection * mv) * a_position;
 }

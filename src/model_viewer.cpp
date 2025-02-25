@@ -37,6 +37,8 @@ struct Context {
     std::string gltfFilename = "armadillo.gltf"; //Assignment2
     // Add more variables here...
     glm::vec3 bgColor = glm::vec3(0.5f, 0.5f, 0.5f);
+    glm::vec3 diffuse_color = glm::vec3(1.0f);
+    glm::vec3 light_position = glm::vec3(1.0f);
     // Enable/Disable matrices
     bool enable_model = false;
     bool enable_view = true;
@@ -105,6 +107,8 @@ void draw_scene(Context &ctx)
     auto modelToWorld = glm::mat4(1.0f);
     auto worldToView = glm::mat4(1.0f);
     auto viewToProjection = glm::mat4(1.0f);
+    // auto diffuse_color = glm::vec3(1.0f);
+    // auto light_position = glm::vec3(1.0f);
 
     /*
      * The normalized device space is a unique cube, with the left, bottom, near of (-1, -1, -1)
@@ -169,6 +173,11 @@ void draw_scene(Context &ctx)
             GL_FALSE, &worldToView[0][0]);
         glUniformMatrix4fv(glGetUniformLocation(ctx.program, "u_projection"), 1,
             GL_FALSE, &viewToProjection[0][0]);
+        // // Lighting
+        // glUniform3f(glGetUniformLocation(ctx.program, "u_diffuseColor"), 1,
+        //     &ctx.diffuse_color[0]);
+        // glUniformMatrix4fv(glGetUniformLocation(ctx.program, "u_lightPosition"), 1,
+        //     GL_FALSE, &ctx.light_position[0]);
 
         // Draw object
         glBindVertexArray(drawable.vao);
