@@ -13,6 +13,8 @@ uniform vec3 u_specularColor;
 // Lighting: Params
 uniform float u_specularPower;
 uniform vec3 u_lightPosition;
+// Fade-in Normal-colors
+uniform float u_display_normal;
 
 // Vertex inputs (attributes from vertex buffers)
 // Note: we often declare the position attribute as vec4 in the
@@ -61,7 +63,8 @@ void main()
         (ambient * vec4(u_ambientColor, 1.0))
         + (diffuse * vec4(u_diffuseColor, 1.0))
         + (specular * vec4(u_specularColor, 1.0))
-    );
+    )*(1.0 - u_display_normal)
+    + vec4(N, 1.0f)*(u_display_normal);
 
     // Debugging POS
 //     v_color = a_position;

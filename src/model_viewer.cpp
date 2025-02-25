@@ -61,6 +61,8 @@ struct Context {
     // Input
     bool enable_track = false;
     cg::Trackball trackball;
+    // Display normals
+    bool display_normals = false;
 };
 
 // Returns the absolute path to the src/shader directory
@@ -175,18 +177,24 @@ void draw_scene(Context &ctx)
         glUniformMatrix4fv(glGetUniformLocation(ctx.program, "u_projection"), 1,
             GL_FALSE, &viewToProjection[0][0]);
 
-        // Lighting
-        glUniform3fv(glGetUniformLocation(ctx.program, "u_ambientColor"), 1,
-            &ctx.ambient_color[0]);
-        glUniform3fv(glGetUniformLocation(ctx.program, "u_diffuseColor"), 1,
-            &ctx.diffuse_color[0]);
-        glUniform3fv(glGetUniformLocation(ctx.program, "u_specularColor"), 1,
-            &ctx.specular_color[0]);
 
-        glUniform1fv(glGetUniformLocation(ctx.program, "u_specularPower"), 1,
-            &ctx.specular_power);
-        glUniform3fv(glGetUniformLocation(ctx.program, "u_lightPosition"), 1,
-            &ctx.light_position[0]);
+        // Display Normals (hack)
+        glUniform1f(glGetUniformLocation(ctx.program, "u_display_normal"), (float) ctx.display_normals);
+
+
+        // Lighting
+        if (!ctx.display_normals) {
+            glUniform3fv(glGetUniformLocation(ctx.program, "u_ambientColor"), 1,
+                &ctx.ambient_color[0]);
+            glUniform3fv(glGetUniformLocation(ctx.program, "u_diffuseColor"), 1,
+                &ctx.diffuse_color[0]);
+            glUniform3fv(glGetUniformLocation(ctx.program, "u_specularColor"), 1,
+                &ctx.specular_color[0]);
+            glUniform1fv(glGetUniformLocation(ctx.program, "u_specularPower"), 1,
+                &ctx.specular_power);
+            glUniform3fv(glGetUniformLocation(ctx.program, "u_lightPosition"), 1,
+                &ctx.light_position[0]);
+        }
 
         // Draw object
         glBindVertexArray(drawable.vao);
@@ -339,12 +347,27 @@ int main(int argc, char *argv[])
 
             ImGui::ColorEdit3("Background Color", &ctx.background_color[0]);
 
-            ImGui::ColorEdit3("Ambient Color", &ctx.ambient_color[0]);
-            ImGui::ColorEdit3("Diffuse Color", &ctx.diffuse_color[0]);
-            ImGui::ColorEdit3("Specular Color", &ctx.specular_color[0]);
+            ImGui::Checkbox("Display Normals", &ctx.display_normals);
+            if (ctx.display_normals) {
+                // Anything useful to do here?
+            } else {
+                ImGui::Checkbox("Enable Ambient Light", &ctx.enable_ambient);
+                if (ctx.enable_ambient) {
+                    ImGui::ColorEdit3("Ambient Color", &ctx.ambient_color[0]);
+                }
 
-            ImGui::SliderFloat("Specular Power", &ctx.specular_power, 1.0f, 50.0f);
-            ImGui::SliderFloat3("Light Position", &ctx.light_position[0], -4.f, 4.f);
+                ImGui::Checkbox("Enable Diffuse Light", &ctx.enable_diffuse);
+                if (ctx.enable_diffuse) {
+                    ImGui::ColorEdit3("Diffuse Color", &ctx.diffuse_color[0]);
+                }
+
+                ImGui::Checkbox("Enable Specular Effects", &ctx.enable_specular);
+                if (ctx.enable_specular) {
+                    ImGui::ColorEdit3("Specular Color", &ctx.specular_color[0]);
+                    ImGui::SliderFloat("Specular Power", &ctx.specular_power, 1.0f, 40.0f);
+                }
+                ImGui::SliderFloat3("Light Position", &ctx.light_position[0], -4.f, 4.f);
+            }
 
             ImGui::Checkbox("Enable Model", &ctx.enable_model);
             if (ctx.enable_model) {
