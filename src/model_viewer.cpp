@@ -60,10 +60,7 @@ struct Context {
     bool edit_model_scale = false;
     bool edit_model_rotate = false;
     bool edit_model_translate = false;
-    uint edit_light = 0;
-    bool edit_ambient = false;
-    bool edit_diffuse = false;
-    bool edit_specular = false;
+    bool edit_lights = false;
 };
 
 // Returns the absolute path to the src/shader directory
@@ -359,25 +356,17 @@ int main(int argc, char *argv[])
             if (ctx.display_normals) {
                 // Anything useful to do here?
             } else {
-                ImGui::Checkbox("Edit Ambient Light", &ctx.edit_ambient);
-                if (ctx.edit_ambient) {
+                ImGui::Checkbox("Edit Lights", &ctx.edit_lights);
+                if (ctx.edit_lights) {
                     ImGui::ColorEdit3("Ambient Color", &ctx.ambient_color[0]);
-                }
-
-                ImGui::Checkbox("Edit Diffuse Light", &ctx.edit_diffuse);
-                if (ctx.edit_diffuse) {
                     ImGui::ColorEdit3("Diffuse Color", &ctx.diffuse_color[0]);
-                }
-
-                ImGui::Checkbox("Edit Specular Effects", &ctx.edit_specular);
-                if (ctx.edit_specular) {
                     ImGui::ColorEdit3("Specular Color", &ctx.specular_color[0]);
                     ImGui::SliderFloat("Specular Power", &ctx.specular_power, 1.0f, 40.0f);
+                    ImGui::SliderFloat3("Light Position", &ctx.light_position[0], -4.f, 4.f);
                 }
-                ImGui::SliderFloat3("Light Position", &ctx.light_position[0], -4.f, 4.f);
             }
 
-            ImGui::Checkbox("Enable Model Transform Editing", &ctx.edit_model_transform);
+            ImGui::Checkbox("Edit Model Transform", &ctx.edit_model_transform);
             if (ctx.edit_model_transform) {
 
                 ImGui::Checkbox("Enable Scale", &ctx.edit_model_scale);
