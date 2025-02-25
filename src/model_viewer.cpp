@@ -102,9 +102,6 @@ void draw_scene(Context &ctx)
     glUniform1f(glGetUniformLocation(ctx.program, "u_time"), ctx.elapsedTime);
 
     // Declare transformation matrices (Model-View-Project)
-    auto model = glm::mat4(1.0f);
-    auto view = glm::mat4(1.0f);
-    auto projection = glm::mat4(1.0f);
     auto modelToWorld = glm::mat4(1.0f);
     auto worldToView = glm::mat4(1.0f);
     auto viewToProjection = glm::mat4(1.0f);
@@ -171,7 +168,6 @@ void draw_scene(Context &ctx)
         glUniformMatrix4fv(glGetUniformLocation(ctx.program, "u_view"), 1,
             GL_FALSE, &worldToView[0][0]);
         glUniformMatrix4fv(glGetUniformLocation(ctx.program, "u_projection"), 1,
-            GL_FALSE, &projection[0][0]);
             GL_FALSE, &viewToProjection[0][0]);
 
         // Draw object
