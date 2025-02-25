@@ -33,34 +33,37 @@ struct Context {
     GLuint emptyVAO;
     float elapsedTime;
     std::string gltfFilename = "armadillo.gltf"; //Assignment2
+    // Display normals
+    bool display_normals = false;
     // Lighting
-    bool enable_ambient = true;
-    bool enable_diffuse = true;
-    bool enable_specular = true;
     glm::vec3 background_color = glm::vec3(0.5f);
     glm::vec3 ambient_color = glm::vec3(0.0f,0.0f,0.16f);
     glm::vec3 diffuse_color = glm::vec3(0.6f,0.0f,0.0f);
     glm::vec3 specular_color = glm::vec3(1.0f,1.0f,0.0f);
     float specular_power = 20.0f;
     glm::vec3 light_position = glm::vec3(1.0f);
-    // Enable/Disable matrices
-    bool enable_edit_model_transform = true;
-    bool enable_view_transform = true;
-    bool enable_projection = true;
-    // Model matrix changes
-    bool enable_model_scale = false;
-    bool enable_model_rotate = false;
-    bool enable_model_translate = false;
+    // Model-space transform
     glm::vec3 log_scale = glm::vec3(0.0f);
     glm::vec3 rotate_angle = glm::vec3(0.0f);
     glm::vec3 translate = glm::vec3(0.0f);
-    // Perspective matrix changes
-    float fov_scroll = 0.0f;
+    // Enable/Disable MVP
+    bool enable_view_transform = true;
+    bool enable_projection = true;
     // Input
-    bool enable_trackball = false;
+    bool enable_trackball = true;
     cg::Trackball trackball;
-    // Display normals
-    bool display_normals = false;
+    // Scroll zoom
+    float scroll_zoom_fov = 0.0f;
+
+    // Edit-in-place flags
+    bool edit_model_transform = false;
+    bool edit_model_scale = false;
+    bool edit_model_rotate = false;
+    bool edit_model_translate = false;
+    uint edit_light = 0;
+    bool edit_ambient = false;
+    bool edit_diffuse = false;
+    bool edit_specular = false;
 };
 
 // Returns the absolute path to the src/shader directory
@@ -120,12 +123,12 @@ void draw_scene(Context &ctx)
     */
 
     // Model transformations: Translation -> Rotation -> Scale
-    if (ctx.enable_edit_model_transform) {
-        if (ctx.enable_model_translate) {
+    if (ctx.edit_model_transform) {
+        if (ctx.edit_model_translate) {
             modelToWorld = glm::translate(modelToWorld, ctx.translate);
         }
 
-        if (ctx.enable_model_rotate) {
+        if (ctx.edit_model_rotate) {
             modelToWorld = glm::rotate(modelToWorld,
                 glm::radians(ctx.rotate_angle[0]),
                 glm::vec3(-1.0f, 0.0f, 0.0f));
@@ -137,7 +140,7 @@ void draw_scene(Context &ctx)
                 glm::vec3(0.0f, 0.0f, 1.0f));
         }
 
-        if (ctx.enable_model_scale) {
+        if (ctx.edit_model_scale) {
             modelToWorld = glm::scale(modelToWorld, glm::exp(ctx.log_scale));
         }
     }
@@ -158,7 +161,7 @@ void draw_scene(Context &ctx)
     glfwGetWindowSize(ctx.window, &ctx.width, &ctx.height);
     const float aspect = ((float)ctx.width)/(float)ctx.height;
     if (ctx.enable_projection) {
-        viewToProjection *= glm::perspective(glm::radians(30.0f * (1.0f + ctx.fov_scroll)), aspect, 0.1f, 10.0f);
+        viewToProjection *= glm::perspective(glm::radians(30.0f * (1.0f + ctx.scroll_zoom_fov)), aspect, 0.1f, 10.0f);
     } else {
         viewToProjection *= glm::ortho(-aspect,aspect,-1.0f,1.0f, 0.1f, 10.0f);
     }
@@ -282,7 +285,7 @@ void scroll_callback(GLFWwindow *window, double x, double y)
     float scroll_scale = 0.1f;
 
     Context *ctx = static_cast<Context *>(glfwGetWindowUserPointer(window));
-    ctx->fov_scroll = glm::clamp(ctx->fov_scroll + (float)(y * scroll_scale), 0.0f, 3.0f);
+    ctx->scroll_zoom_fov = glm::clamp(ctx->scroll_zoom_fov + (float)(y * scroll_scale), 0.0f, 3.0f);
 }
 
 void resize_callback(GLFWwindow *window, int width, int height)
@@ -356,48 +359,49 @@ int main(int argc, char *argv[])
             if (ctx.display_normals) {
                 // Anything useful to do here?
             } else {
-                ImGui::Checkbox("Enable Ambient Light", &ctx.enable_ambient);
-                if (ctx.enable_ambient) {
+                ImGui::Checkbox("Edit Ambient Light", &ctx.edit_ambient);
+                if (ctx.edit_ambient) {
                     ImGui::ColorEdit3("Ambient Color", &ctx.ambient_color[0]);
                 }
 
-                ImGui::Checkbox("Enable Diffuse Light", &ctx.enable_diffuse);
-                if (ctx.enable_diffuse) {
+                ImGui::Checkbox("Edit Diffuse Light", &ctx.edit_diffuse);
+                if (ctx.edit_diffuse) {
                     ImGui::ColorEdit3("Diffuse Color", &ctx.diffuse_color[0]);
                 }
 
-                ImGui::Checkbox("Enable Specular Effects", &ctx.enable_specular);
-                if (ctx.enable_specular) {
+                ImGui::Checkbox("Edit Specular Effects", &ctx.edit_specular);
+                if (ctx.edit_specular) {
                     ImGui::ColorEdit3("Specular Color", &ctx.specular_color[0]);
                     ImGui::SliderFloat("Specular Power", &ctx.specular_power, 1.0f, 40.0f);
                 }
                 ImGui::SliderFloat3("Light Position", &ctx.light_position[0], -4.f, 4.f);
             }
 
-            ImGui::Checkbox("Enable Model Transform Editing", &ctx.enable_edit_model_transform);
-            if (ctx.enable_edit_model_transform) {
+            ImGui::Checkbox("Enable Model Transform Editing", &ctx.edit_model_transform);
+            if (ctx.edit_model_transform) {
 
-                ImGui::Checkbox("Enable Scale", &ctx.enable_model_scale);
-                if (ctx.enable_model_scale)
+                ImGui::Checkbox("Enable Scale", &ctx.edit_model_scale);
+                if (ctx.edit_model_scale)
                     ImGui::SliderFloat3("(log) Scale X/Y/Z", &ctx.log_scale[0], -1.0f, 1.0f);
 
-                ImGui::Checkbox("Enable Rotate", &ctx.enable_model_rotate);
-                if (ctx.enable_model_rotate)
+                ImGui::Checkbox("Enable Rotate", &ctx.edit_model_rotate);
+                if (ctx.edit_model_rotate)
                     ImGui::SliderFloat3("Rotate Deg. About X/Y/Z", &ctx.rotate_angle[0], -180.0f, 180.0f);
 
-                ImGui::Checkbox("Enable Translate", &ctx.enable_model_translate);
-                if (ctx.enable_model_translate)
+                ImGui::Checkbox("Enable Translate", &ctx.edit_model_translate);
+                if (ctx.edit_model_translate)
                     ImGui::SliderFloat3("Translate X/Y/Z", &ctx.translate[0], -1.0f, 1.0f);
 
                 // ImGui::SliderFloat("Origin Z-Offset", &ctx.z_offset, 0.0f, 10.0f);
 
             }
 
-            ImGui::Checkbox("Enable View", &ctx.enable_view_transform);
-            if (ctx.enable_view_transform) {
-                ImGui::Checkbox("Enable Trackball", &ctx.enable_trackball);
-                ImGui::Checkbox("Use Projection/Else Orthographic", &ctx.enable_projection);
-            }
+            ImGui::Checkbox("Use Projection Camera", &ctx.enable_projection);
+            // ImGui::Checkbox("Enable View Transform", &ctx.enable_view_transform);
+            // if (ctx.enable_view_transform) {
+            //     // ImGui::Checkbox("Enable Trackball", &ctx.enable_trackball);
+            //     // ImGui::Checkbox("Use Projection Camera", &ctx.enable_projection);
+            // }
 
         }
         ImGui::End();

@@ -64,7 +64,7 @@ void main()
         + (diffuse * vec4(u_diffuseColor, 1.0))
         + (specular * vec4(u_specularColor, 1.0))
     )*(1.0 - u_display_normal)
-    + vec4(N, 1.0f)*(u_display_normal);
+    + vec4(a_normal, 1.0f)*(u_display_normal);
 
     // Debugging POS
 //     v_color = a_position;
