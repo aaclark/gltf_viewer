@@ -105,6 +105,9 @@ void draw_scene(Context &ctx)
     auto model = glm::mat4(1.0f);
     auto view = glm::mat4(1.0f);
     auto projection = glm::mat4(1.0f);
+    auto modelToWorld = glm::mat4(1.0f);
+    auto worldToView = glm::mat4(1.0f);
+    auto viewToProjection = glm::mat4(1.0f);
 
     /*
      * The normalized device space is a unique cube, with the left, bottom, near of (-1, -1, -1)
@@ -118,23 +121,23 @@ void draw_scene(Context &ctx)
     if (ctx.enable_model) {
 
         if (ctx.enable_translate) {
-            model = glm::translate(model, ctx.translate);
+            modelToWorld = glm::translate(modelToWorld, ctx.translate);
         }
 
         if (ctx.enable_rotate_angle) {
-            model = glm::rotate(model,
+            modelToWorld = glm::rotate(modelToWorld,
                 glm::radians(ctx.rotate_angle[0]),
-                glm::vec3(1.0f, 0.0f, 0.0f));
-            model = glm::rotate(model,
+                glm::vec3(-1.0f, 0.0f, 0.0f));
+            modelToWorld = glm::rotate(modelToWorld,
                 glm::radians(ctx.rotate_angle[1]),
                 glm::vec3(0.0f, 1.0f, 0.0f));
-            model = glm::rotate(model,
+            modelToWorld = glm::rotate(modelToWorld,
                 glm::radians(ctx.rotate_angle[2]),
                 glm::vec3(0.0f, 0.0f, 1.0f));
         }
 
         if (ctx.enable_scale) {
-            model = glm::scale(model, glm::exp(ctx.log_scale));
+            modelToWorld = glm::scale(modelToWorld, glm::exp(ctx.log_scale));
         }
     }
 
@@ -142,9 +145,9 @@ void draw_scene(Context &ctx)
     if (ctx.enable_view) {
         // Mouse input (trackball)
         if (ctx.enable_track) {
-            view *= glm::mat4(ctx.trackball.orient);
+            worldToView *= glm::mat4(ctx.trackball.orient);
         }
-        view *= glm::lookAt( // FIXME includes clipping
+        worldToView *= glm::lookAt( // FIXME includes clipping
             glm::vec3(0.0f, 0.0f, -1.0f),
             glm::vec3(0.0f, 0.0f, 0.0f),
             glm::vec3(0.0f, 1.0f, 0.0f));
@@ -154,7 +157,7 @@ void draw_scene(Context &ctx)
     if (ctx.enable_projection) {
         // Camera projection
         glfwGetWindowSize(ctx.window,&ctx.width,&ctx.height);
-        projection *= glm::perspective(glm::radians(ctx.fov_y_degrees), ((float)ctx.width)/(float)ctx.height, 0.1f, 5.0f);
+        viewToProjection *= glm::perspective(glm::radians(ctx.fov_y_degrees), ((float)ctx.width)/(float)ctx.height, 0.1f, 10.0f);
     }
 
     // Draw scene
@@ -162,13 +165,14 @@ void draw_scene(Context &ctx)
         const gltf::Node &node = ctx.asset.nodes[i];
         const gltf::Drawable &drawable = ctx.drawables[node.mesh];
 
-        // // Define per-object uniforms
+        // Define per-object uniforms
         glUniformMatrix4fv(glGetUniformLocation(ctx.program, "u_model"), 1,
-            GL_FALSE, &model[0][0]);
+            GL_FALSE, &modelToWorld[0][0]);
         glUniformMatrix4fv(glGetUniformLocation(ctx.program, "u_view"), 1,
-            GL_FALSE, &view[0][0]);
+            GL_FALSE, &worldToView[0][0]);
         glUniformMatrix4fv(glGetUniformLocation(ctx.program, "u_projection"), 1,
             GL_FALSE, &projection[0][0]);
+            GL_FALSE, &viewToProjection[0][0]);
 
         // Draw object
         glBindVertexArray(drawable.vao);
