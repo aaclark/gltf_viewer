@@ -58,6 +58,22 @@ void main()
     float specular_angle = max(0.0, dot(N, H));
     float specular = pow(specular_angle, u_specularPower);
 
+    /** Rendering Equation (LaTeX):
+    $$
+        \text{Illumination} =
+        I =
+        \overbrace{
+          K_a
+        }^{I_a} % Illumination(ambient)
+        + \overbrace{
+          K_dL \max(N \cdot L, 0)
+        }^{I_d} % Illumination(diffuse)
+        + \overbrace{
+          K_s L(N \cdot H)^\alpha
+        }^{I_s} % Illumination(specular)
+    $$
+    */
+
     // Multiply the diffuse reflection term with the base surface color
     v_color = (
         (ambient * vec4(u_ambientColor, 1.0))
