@@ -1,7 +1,4 @@
 // Model viewer code for the assignments in Computer Graphics 1TD388/1MD150.
-//
-// Modify this and other source files according to the tasks in the instructions.
-//
 
 #include "gltf_io.h"
 #include "gltf_scene.h"
@@ -24,43 +21,80 @@
 
 // Struct for our application context
 struct Context {
-    int width = 512;
-    int height = 512;
     GLFWwindow *window;
     gltf::GLTFAsset asset;
     gltf::DrawableList drawables;
     GLuint program;
     GLuint emptyVAO;
     float elapsedTime;
-    std::string gltfFilename = "armadillo.gltf"; //Assignment2
-    // Display normals
-    bool display_normals = false;
+    cg::Trackball trackball;
+
+    typedef struct Defaults {
+    } defaults;
+
+    int width = 512;
+    int height = 512;
+
+    // std::vector<std::string> gltf_files = {
+    //     "armadillo.gltf",
+    //     "blendaxes1.gltf",
+    //     "bunny.gltf",
+    //     "bunny_flat.gltf",
+    //     "cube_rgb.gltf",
+    //     "gargo.gltf",
+    //     "lpshead.gltf",
+    //     "teapot.gltf",
+    //     "triangle.gltf",
+    // };
+    std::string gltf_filename = "armadillo.gltf";
+
+    /**
+     * Model - View - Projection:
+     * Model transform: object-local coordinates to world space
+     * View transform: world space to camera space
+     * Projection transform: camera space to pixel coordinates
+     * In all cases, use Homogeneous Coordinates for vectors:
+     * If w == 1, then the vector (x,y,z,1) is a position in space.
+     * If w == 0, then the vector (x,y,z,0) is a direction.
+     */
+    // Model-space transform
+    glm::vec3 scale = glm::vec3(1.0f);
+    glm::vec3 rotate_angle = glm::vec3(0.0f);
+    glm::vec3 translate = glm::vec3(0.0f);
+    // View-space transform
+    glm::float32 scroll_zoom_fov = 0.0f;
     // Lighting
-    glm::vec3 background_color = glm::vec3(0.5f);
+    glm::vec3 background_color = glm::vec3(0.0f,0.0f,0.16f);
     glm::vec3 ambient_color = glm::vec3(0.0f,0.0f,0.16f);
     glm::vec3 diffuse_color = glm::vec3(0.6f,0.0f,0.0f);
     glm::vec3 specular_color = glm::vec3(1.0f,1.0f,0.0f);
-    float specular_power = 20.0f;
+    glm::float32 specular_power = 1.0f;
     glm::vec3 light_position = glm::vec3(1.0f);
-    // Model-space transform
-    glm::vec3 log_scale = glm::vec3(0.0f);
-    glm::vec3 rotate_angle = glm::vec3(0.0f);
-    glm::vec3 translate = glm::vec3(0.0f);
-    // Enable/Disable MVP
-    bool enable_view_transform = true;
-    bool enable_projection = true;
-    // Input
-    bool enable_trackball = true;
-    cg::Trackball trackball;
-    // Scroll zoom
-    float scroll_zoom_fov = 0.0f;
+    glm::float32 gamma_correction_value = 2.2f;
 
-    // Edit-in-place flags
+
+    // Input Toggles
+    bool enable_trackball = true;
+    bool enable_scroll_zoom = true;
+    // Lighting and Color Toggles
+    bool enable_lighting = true;
+    bool edit_lighting = false;
+    bool background_is_ambient_color = false;
+    bool enable_gamma_correction = true;
+    bool edit_gamma_correction = false;
+    bool enable_display_normal = false;
+    // Model enable/edit
+    bool enable_model_transform = true;
     bool edit_model_transform = false;
     bool edit_model_scale = false;
     bool edit_model_rotate = false;
     bool edit_model_translate = false;
-    bool edit_lights = false;
+    // View enable/edit
+    bool enable_view_transform = true;
+    bool edit_view_transform = false;
+    // Project enable/edit
+    bool enable_projection_transform = true;
+    bool edit_projection_transform = false;
 };
 
 // Returns the absolute path to the src/shader directory
@@ -91,7 +125,7 @@ void do_initialization(Context &ctx)
         shader_dir() + "mesh.vert",
         shader_dir() + "mesh.frag");
 
-    gltf::load_gltf_asset(ctx.gltfFilename, gltf_dir(), ctx.asset);
+    gltf::load_gltf_asset(ctx.gltf_filename, gltf_dir(), ctx.asset);
     gltf::create_drawables_from_gltf_asset(ctx.drawables, ctx.asset);
 }
 
@@ -138,7 +172,7 @@ void draw_scene(Context &ctx)
         }
 
         if (ctx.edit_model_scale) {
-            modelToWorld = glm::scale(modelToWorld, glm::exp(ctx.log_scale));
+            modelToWorld = glm::scale(modelToWorld, ctx.scale);
         }
     }
 
@@ -157,7 +191,7 @@ void draw_scene(Context &ctx)
     // Camera
     glfwGetWindowSize(ctx.window, &ctx.width, &ctx.height);
     const float aspect = ((float)ctx.width)/(float)ctx.height;
-    if (ctx.enable_projection) {
+    if (ctx.enable_projection_transform) {
         viewToProjection *= glm::perspective(glm::radians(30.0f * (1.0f + ctx.scroll_zoom_fov)), aspect, 0.1f, 10.0f);
     } else {
         viewToProjection *= glm::ortho(-aspect,aspect,-1.0f,1.0f, 0.1f, 10.0f);
@@ -179,22 +213,27 @@ void draw_scene(Context &ctx)
 
 
         // Display Normals (hack)
-        glUniform1f(glGetUniformLocation(ctx.program, "u_display_normal"), (float) ctx.display_normals);
+        glUniform1f(glGetUniformLocation(ctx.program, "u_display_normal"), (float) ctx.enable_display_normal);
 
 
-        // Lighting
-        if (!ctx.display_normals) {
-            glUniform3fv(glGetUniformLocation(ctx.program, "u_ambientColor"), 1,
-                &ctx.ambient_color[0]);
-            glUniform3fv(glGetUniformLocation(ctx.program, "u_diffuseColor"), 1,
-                &ctx.diffuse_color[0]);
-            glUniform3fv(glGetUniformLocation(ctx.program, "u_specularColor"), 1,
-                &ctx.specular_color[0]);
-            glUniform1fv(glGetUniformLocation(ctx.program, "u_specularPower"), 1,
-                &ctx.specular_power);
-            glUniform3fv(glGetUniformLocation(ctx.program, "u_lightPosition"), 1,
-                &ctx.light_position[0]);
-        }
+        // Lighting/Rendering Equation
+        auto background_ambient_color = ctx.ambient_color;
+        if (ctx.background_is_ambient_color) {background_ambient_color = ctx.background_color;}
+        glUniform3fv(glGetUniformLocation(ctx.program, "u_ambient_color"), 1,
+            &background_ambient_color[0]);
+        glUniform3fv(glGetUniformLocation(ctx.program, "u_diffuse_color"), 1,
+            &ctx.diffuse_color[0]);
+        glUniform3fv(glGetUniformLocation(ctx.program, "u_specular_color"), 1,
+            &ctx.specular_color[0]);
+        glUniform1fv(glGetUniformLocation(ctx.program, "u_specular_power"), 1,
+            &ctx.specular_power);
+        glUniform3fv(glGetUniformLocation(ctx.program, "u_light_position"), 1,
+            &ctx.light_position[0]);
+
+
+        // Gamma Correction
+        glUniform1f(glGetUniformLocation(ctx.program, "u_gamma"), ctx.gamma_correction_value);
+
 
         // Draw object
         glBindVertexArray(drawable.vao);
@@ -297,7 +336,7 @@ void resize_callback(GLFWwindow *window, int width, int height)
 int main(int argc, char *argv[])
 {
     Context ctx = Context();
-    if (argc > 1) { ctx.gltfFilename = std::string(argv[1]); }
+    if (argc > 1) { ctx.gltf_filename = std::string(argv[1]); }
 
     // Create a GLFW window
     glfwSetErrorCallback(error_callback);
@@ -350,20 +389,26 @@ int main(int argc, char *argv[])
 
             ImGui::Text("FPS: %.2f", ImGui::GetIO().Framerate);
 
-            ImGui::ColorEdit3("Background Color", &ctx.background_color[0]);
 
-            ImGui::Checkbox("Display Normals", &ctx.display_normals);
-            if (ctx.display_normals) {
-                // Anything useful to do here?
-            } else {
-                ImGui::Checkbox("Edit Lights", &ctx.edit_lights);
-                if (ctx.edit_lights) {
+            // ImGui::Checkbox("Display Normals", &ctx.enable_display_normal);
+            // if (ctx.enable_display_normal) {}
+
+            ImGui::ColorEdit3("Background Color", &ctx.background_color[0]);
+            ImGui::Checkbox("Edit Lights", &ctx.edit_lighting);
+            if (ctx.edit_lighting) {
+                ImGui::Checkbox("Background is Ambient Color", &ctx.background_is_ambient_color);
+                if (ctx.background_is_ambient_color) {} else {
                     ImGui::ColorEdit3("Ambient Color", &ctx.ambient_color[0]);
-                    ImGui::ColorEdit3("Diffuse Color", &ctx.diffuse_color[0]);
-                    ImGui::ColorEdit3("Specular Color", &ctx.specular_color[0]);
-                    ImGui::SliderFloat("Specular Power", &ctx.specular_power, 1.0f, 40.0f);
-                    ImGui::SliderFloat3("Light Position", &ctx.light_position[0], -4.f, 4.f);
                 }
+                ImGui::ColorEdit3("Diffuse Color", &ctx.diffuse_color[0]);
+                ImGui::ColorEdit3("Specular Color", &ctx.specular_color[0]);
+                ImGui::SliderFloat("Specular Power", &ctx.specular_power, 1.0f, 100.0f);
+                ImGui::SliderFloat3("Light Position", &ctx.light_position[0], -4.f, 4.f);
+            }
+
+            ImGui::Checkbox("Edit Gamma Correction" , &ctx.edit_gamma_correction);
+            if (ctx.edit_gamma_correction) {
+                ImGui::SliderFloat("Gamma Value", &ctx.gamma_correction_value, 1.0f, 2.2f);
             }
 
             ImGui::Checkbox("Edit Model Transform", &ctx.edit_model_transform);
@@ -371,7 +416,7 @@ int main(int argc, char *argv[])
 
                 ImGui::Checkbox("Enable Scale", &ctx.edit_model_scale);
                 if (ctx.edit_model_scale)
-                    ImGui::SliderFloat3("(log) Scale X/Y/Z", &ctx.log_scale[0], -1.0f, 1.0f);
+                    ImGui::SliderFloat3("Scale X/Y/Z", &ctx.scale[0], 0.1f, 10.0f);
 
                 ImGui::Checkbox("Enable Rotate", &ctx.edit_model_rotate);
                 if (ctx.edit_model_rotate)
@@ -385,7 +430,7 @@ int main(int argc, char *argv[])
 
             }
 
-            ImGui::Checkbox("Use Projection Camera", &ctx.enable_projection);
+            ImGui::Checkbox("Use Projection Camera", &ctx.enable_projection_transform);
             // ImGui::Checkbox("Enable View Transform", &ctx.enable_view_transform);
             // if (ctx.enable_view_transform) {
             //     // ImGui::Checkbox("Enable Trackball", &ctx.enable_trackball);
