@@ -26,14 +26,15 @@ struct Context {
     gltf::DrawableList drawables;
     GLuint program;
     GLuint emptyVAO;
+    GLuint cubemap;
     float elapsedTime;
     cg::Trackball trackball;
 
     typedef struct Defaults {
     } defaults;
 
-    int width = 512;
-    int height = 512;
+    int width = 1024;
+    int height = 768;
 
     // std::vector<std::string> gltf_files = {
     //     "armadillo.gltf",
@@ -64,13 +65,16 @@ struct Context {
     // View-space transform
     glm::float32 scroll_zoom_fov = 0.0f;
     // Lighting
-    glm::vec3 background_color = glm::vec3(0.0f,0.0f,0.16f);
+    glm::vec3 background_color = glm::vec3(0.1f,0.1f,0.12f);
     glm::vec3 ambient_color = glm::vec3(0.0f,0.0f,0.16f);
     glm::vec3 diffuse_color = glm::vec3(0.6f,0.0f,0.0f);
-    glm::vec3 specular_color = glm::vec3(1.0f,1.0f,0.0f);
+    glm::vec3 specular_color = glm::vec3(1.0f,0.7f,0.0f);
     glm::float32 specular_power = 1.0f;
     glm::vec3 light_position = glm::vec3(1.0f);
     glm::float32 gamma_correction_value = 2.2f;
+    // Texture
+    glm::float32 reflectance_factor = 0.0f;
+
 
 
     // Input Toggles
@@ -79,7 +83,10 @@ struct Context {
     // Lighting and Color Toggles
     bool enable_lighting = true;
     bool edit_lighting = false;
-    bool background_is_ambient_color = false;
+    enum {AMBIENT, DIFFUSE, BACKGROUND};
+    int ambient_color_type = AMBIENT;
+    float ambient_factor = 1.0f;
+    bool specular_restrict = false;
     bool enable_gamma_correction = true;
     bool edit_gamma_correction = false;
     bool enable_display_normal = false;
@@ -119,6 +126,17 @@ std::string gltf_dir(void)
     return rootDir + "/assets/gltf/";
 }
 
+// Returns the absolute path to the src/shader directory
+std::string cubemap_dir(void)
+{
+    std::string rootDir = cg::get_env_var("MODEL_VIEWER_ROOT");
+    if (rootDir.empty()) {
+        std::cout << "Error: MODEL_VIEWER_ROOT is not set." << std::endl;
+        std::exit(EXIT_FAILURE);
+    }
+    return rootDir + "/assets/cubemaps/";
+}
+
 void do_initialization(Context &ctx)
 {
     ctx.program = cg::load_shader_program(
@@ -127,6 +145,7 @@ void do_initialization(Context &ctx)
 
     gltf::load_gltf_asset(ctx.gltf_filename, gltf_dir(), ctx.asset);
     gltf::create_drawables_from_gltf_asset(ctx.drawables, ctx.asset);
+    ctx.cubemap = cg::load_cubemap(cubemap_dir() + "/RomeChurch/");
 }
 
 void draw_scene(Context &ctx)
@@ -154,27 +173,23 @@ void draw_scene(Context &ctx)
     */
 
     // Model transformations: Translation -> Rotation -> Scale
-    if (ctx.edit_model_transform) {
-        if (ctx.edit_model_translate) {
-            modelToWorld = glm::translate(modelToWorld, ctx.translate);
-        }
-
-        if (ctx.edit_model_rotate) {
-            modelToWorld = glm::rotate(modelToWorld,
-                glm::radians(ctx.rotate_angle[0]),
-                glm::vec3(-1.0f, 0.0f, 0.0f));
-            modelToWorld = glm::rotate(modelToWorld,
-                glm::radians(ctx.rotate_angle[1]),
-                glm::vec3(0.0f, 1.0f, 0.0f));
-            modelToWorld = glm::rotate(modelToWorld,
-                glm::radians(ctx.rotate_angle[2]),
-                glm::vec3(0.0f, 0.0f, 1.0f));
-        }
-
-        if (ctx.edit_model_scale) {
+    if (ctx.edit_model_translate) {
+        modelToWorld = glm::translate(modelToWorld, ctx.translate);
+    }
+    if (ctx.edit_model_rotate) {
+        modelToWorld = glm::rotate(modelToWorld,
+            glm::radians(ctx.rotate_angle[0]),
+            glm::vec3(-1.0f, 0.0f, 0.0f));
+        modelToWorld = glm::rotate(modelToWorld,
+            glm::radians(ctx.rotate_angle[1]),
+            glm::vec3(0.0f, 1.0f, 0.0f));
+        modelToWorld = glm::rotate(modelToWorld,
+            glm::radians(ctx.rotate_angle[2]),
+            glm::vec3(0.0f, 0.0f, 1.0f));
+    }
+    if (ctx.edit_model_scale) {
             modelToWorld = glm::scale(modelToWorld, ctx.scale);
         }
-    }
 
     // Change of frame
     if (ctx.enable_view_transform) {
@@ -213,14 +228,29 @@ void draw_scene(Context &ctx)
 
 
         // Display Normals (hack)
-        glUniform1f(glGetUniformLocation(ctx.program, "u_display_normal"), (float) ctx.enable_display_normal);
+        // glUniform1f(glGetUniformLocation(ctx.program, "u_display_normal"), (float) ctx.enable_display_normal);
 
 
         // Lighting/Rendering Equation
-        auto background_ambient_color = ctx.ambient_color;
-        if (ctx.background_is_ambient_color) {background_ambient_color = ctx.background_color;}
+        auto _ambient_color = &ctx.ambient_color[0];
+        switch (ctx.ambient_color_type) {
+        case Context::BACKGROUND:
+            _ambient_color = &(ctx.background_color[0]);
+            ctx.ambient_factor = 1.0f;
+            break;
+        case Context::DIFFUSE:
+            //The ambient color Ka can be set to a small multiple (try 0.01-0.1)
+            //of the diffuse color Kd.
+            _ambient_color = &(ctx.diffuse_color[0]);
+            ctx.ambient_factor = 0.1f;
+            break;
+        default:
+            _ambient_color = &(ctx.ambient_color[0]);
+            ctx.ambient_factor = 1.0f;
+            break;
+        };
         glUniform3fv(glGetUniformLocation(ctx.program, "u_ambient_color"), 1,
-            &background_ambient_color[0]);
+            _ambient_color);
         glUniform3fv(glGetUniformLocation(ctx.program, "u_diffuse_color"), 1,
             &ctx.diffuse_color[0]);
         glUniform3fv(glGetUniformLocation(ctx.program, "u_specular_color"), 1,
@@ -229,10 +259,15 @@ void draw_scene(Context &ctx)
             &ctx.specular_power);
         glUniform3fv(glGetUniformLocation(ctx.program, "u_light_position"), 1,
             &ctx.light_position[0]);
-
-
         // Gamma Correction
-        glUniform1f(glGetUniformLocation(ctx.program, "u_gamma"), ctx.gamma_correction_value);
+        glUniform1f(glGetUniformLocation(ctx.program, "u_gamma"),
+            ctx.gamma_correction_value);
+        // Load Cubemap texture
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_CUBE_MAP, ctx.cubemap);
+        glUniform1i(glGetUniformLocation(ctx.program, "u_cubemap"), 0);
+        glUniform1f(glGetUniformLocation(ctx.program, "u_reflectance_value"),
+            ctx.reflectance_factor);
 
 
         // Draw object
@@ -386,51 +421,79 @@ int main(int argc, char *argv[])
 
         ImGui::Begin("Settings");
         {
-
             ImGui::Text("FPS: %.2f", ImGui::GetIO().Framerate);
 
-
-            // ImGui::Checkbox("Display Normals", &ctx.enable_display_normal);
-            // if (ctx.enable_display_normal) {}
-
-            ImGui::ColorEdit3("Background Color", &ctx.background_color[0]);
-            ImGui::Checkbox("Edit Lights", &ctx.edit_lighting);
-            if (ctx.edit_lighting) {
-                ImGui::Checkbox("Background is Ambient Color", &ctx.background_is_ambient_color);
-                if (ctx.background_is_ambient_color) {} else {
-                    ImGui::ColorEdit3("Ambient Color", &ctx.ambient_color[0]);
-                }
-                ImGui::ColorEdit3("Diffuse Color", &ctx.diffuse_color[0]);
-                ImGui::ColorEdit3("Specular Color", &ctx.specular_color[0]);
-                ImGui::SliderFloat("Specular Power", &ctx.specular_power, 1.0f, 100.0f);
-                ImGui::SliderFloat3("Light Position", &ctx.light_position[0], -4.f, 4.f);
-            }
-
-            ImGui::Checkbox("Edit Gamma Correction" , &ctx.edit_gamma_correction);
-            if (ctx.edit_gamma_correction) {
-                ImGui::SliderFloat("Gamma Value", &ctx.gamma_correction_value, 1.0f, 2.2f);
-            }
-
-            ImGui::Checkbox("Edit Model Transform", &ctx.edit_model_transform);
-            if (ctx.edit_model_transform) {
-
-                ImGui::Checkbox("Enable Scale", &ctx.edit_model_scale);
-                if (ctx.edit_model_scale)
+            if (ImGui::TreeNode("Geometry")) {
+                if ((ctx.edit_model_scale = ImGui::TreeNode("Scale"))) {
                     ImGui::SliderFloat3("Scale X/Y/Z", &ctx.scale[0], 0.1f, 10.0f);
-
-                ImGui::Checkbox("Enable Rotate", &ctx.edit_model_rotate);
-                if (ctx.edit_model_rotate)
-                    ImGui::SliderFloat3("Rotate Deg. About X/Y/Z", &ctx.rotate_angle[0], -180.0f, 180.0f);
-
-                ImGui::Checkbox("Enable Translate", &ctx.edit_model_translate);
-                if (ctx.edit_model_translate)
+                    ImGui::TreePop();
+                }
+                if ((ctx.edit_model_rotate = ImGui::TreeNode("Rotation"))) {
+                    ImGui::SliderFloat3("Rotate About X/Y/Z", &ctx.rotate_angle[0], -180.0f, 180.0f);
+                    ImGui::TreePop();
+                }
+                if ((ctx.edit_model_translate = ImGui::TreeNode("Translation"))) {
                     ImGui::SliderFloat3("Translate X/Y/Z", &ctx.translate[0], -1.0f, 1.0f);
-
-                // ImGui::SliderFloat("Origin Z-Offset", &ctx.z_offset, 0.0f, 10.0f);
-
+                    ImGui::TreePop();
+                }
+                ImGui::TreePop();
             }
+            if (ImGui::TreeNode("Surface")) {
+                ImGui::ColorEdit3("Background Color", &ctx.background_color[0]);
+                ImGui::ColorEdit3("Diffuse Color", &ctx.diffuse_color[0]);
+                if (ImGui::TreeNode("Reflection")) {
+                    ImGui::SliderFloat("Surface Factor", &ctx.reflectance_factor, 0.0f, 1.0f);
+                    // ImGui::SliderFloat("Background Factor", &ctx.reflectance_factor, 0.0f, 1.0f);
+                    ImGui::TreePop();
+                }
+                ImGui::TreePop();
+            }
+            if (ImGui::TreeNode("Light")) {
+                /**
+                 * The ambient color Ka can be set to a small multiple (try 0.01-0.1) of the
+                 * diffuse color Kd.
+                 */
+                ImGui::Text("Ambient");
+                {
+                    ImGui::RadioButton("Separate", &ctx.ambient_color_type, Context::AMBIENT);
+                    ImGui::SameLine();
+                    ImGui::RadioButton("Diffuse", &ctx.ambient_color_type, Context::DIFFUSE);
+                    ImGui::SameLine();
+                    ImGui::RadioButton("Background", &ctx.ambient_color_type, Context::BACKGROUND);
+                    if (ctx.ambient_color_type == Context::AMBIENT){
+                        ImGui::ColorEdit3("Ambient Color", &ctx.ambient_color[0]);
+                    }
+                }
+                /**
+                 * As a rule of thumb, the specular color Ks for plastic and other non-metallic
+                 * materials should be monochrome and have fairly low intensity, e.g., vec3(0.04).
+                 */
+                ImGui::Text("Specular");
+                ImGui::SliderFloat3("Point Light Position", &ctx.light_position[0], -4.f, 4.f);
+                {
+                    ImGui::Checkbox("Monochrome-Restricted", &ctx.specular_restrict);
+                    if (ctx.specular_restrict) {
+                        ctx.specular_color[2] = ctx.specular_color[1] = ctx.specular_color[0];
+                        ImGui::SliderFloat("Value", &ctx.specular_color[0], 0.0f, 0.05f);
+                    } else {
+                        ImGui::ColorEdit3("Color", &ctx.specular_color[0]);
+                    }
+                    ImGui::SliderFloat("Power", &ctx.specular_power, 1.0f, 10.0f);
+                }
+                ImGui::TreePop();
+            }
+            if (ImGui::TreeNode("Gamma Correction")) {
+                ImGui::SliderFloat("Gamma Value", &ctx.gamma_correction_value, 1.0f, 2.2f);
+                ImGui::TreePop();
+            }
+
+
 
             ImGui::Checkbox("Use Projection Camera", &ctx.enable_projection_transform);
+            if (&ctx.enable_projection_transform) {
+                // ImGui::SliderFloat("Origin Z-Offset", &ctx.z_offset, 0.0f, 10.0f);
+            }
+
             // ImGui::Checkbox("Enable View Transform", &ctx.enable_view_transform);
             // if (ctx.enable_view_transform) {
             //     // ImGui::Checkbox("Enable Trackball", &ctx.enable_trackball);

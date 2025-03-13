@@ -2,21 +2,11 @@
 #extension GL_ARB_explicit_attrib_location : require
 
 // Uniform constants
-//uniform float u_time;
+uniform float u_time;
 uniform mat4 u_model;
 uniform mat4 u_view;
 uniform mat4 u_projection;
-// Lighting: Color
-//uniform vec3 u_ambient_color;
-//uniform vec3 u_diffuse_color;
-//uniform vec3 u_specular_color;
-// Lighting: Params
-//uniform float u_specular_power;
 uniform vec3 u_light_position;
-// Fade-in Normal-colors
-//uniform float u_display_normal = 0.0;
-// Display Gamma
-//uniform float u_gamma;
 
 // Vertex inputs (attributes from vertex buffers)
 // Note: we often declare the position attribute as vec4 in the
